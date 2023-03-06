@@ -3,20 +3,20 @@
 # Define variables
 ROOTFS_SIZE_MB=100
 ROOTFS_IMAGE_NAME=centos7-rootfs.img
-CENTOS7_MINIMAL_URL=http://mirror.centos.org/centos/7.9.2009/os/x86_64/images/minimal/CentOS-7-x86_64-Minimal-2009.iso
+DOCKERFILE_PATH=Dockerfile.centos7
 
-# Download minimal ISO image for CentOS 7
-echo "Downloading CentOS 7 minimal ISO image..."
-curl -L -o centos7-minimal.iso $CENTOS7_MINIMAL_URL
+# Build Docker image
+echo "Building Docker image..."
+docker build -f $DOCKERFILE_PATH -t centos7-firecracker .
 
-# Extract the rootfs from ISO image
-echo "Extracting rootfs from CentOS 7 minimal ISO image..."
-7z x -so centos7-minimal.iso \
-  'CentOS_BuildTag' 'CentOS_BuildTime' 'EFI/BOOT/*' \
-  'isolinux/*' 'LiveOS/*' 'Packages/*' 'repodata/*' | \
-  xzcat | tar -xf - -C rootfs/
+# Run Docker container to extract rootfs files
+echo "Extracting rootfs files..."
+docker run --rm \
+  -v "$(pwd)/rootfs:/rootfs" \
+  centos7-firecracker \
+  /bin/bash -c "mkdir -p /rootfs && rpm2cpio /tmp/centos7-minimal.rpm | cpio -idmv -D /rootfs"
 
-# Create the rootfs image
+# Create rootfs image
 echo "Creating rootfs image..."
 dd if=/dev/zero of=$ROOTFS_IMAGE_NAME bs=1M count=$ROOTFS_SIZE_MB
 mkfs.ext4 -F $ROOTFS_IMAGE_NAME
@@ -25,9 +25,9 @@ sudo mount -o loop $ROOTFS_IMAGE_NAME /mnt/loop
 sudo cp -a rootfs/* /mnt/loop/
 sudo umount /mnt/loop
 
-# Cleaning up
+# Clean up
 echo "Cleaning up..."
 rm -rf rootfs/
-rm centos7-minimal.iso
+docker rmi centos7-firecracker
 
 echo "Done!"
